@@ -9,9 +9,10 @@
     <form id="downloadForm" onsubmit="return downloadResources(this)">
       <label for="token">Authorization: Bearer </label>
       <input id="token" name="token" type="text"><br/>
-      <textarea id="payload" name="payload" rows="20" cols="90">[{"id": "278cde7b-0bc1-4af2-b9e3-0c887d284e4c"}]</textarea><br/>
+      <textarea id="payload" name="payload" rows="20" cols="90">[{"id":"4fe47a57-f228-484e-a6a1-bf9341519dc8"}]</textarea><br/>
       <button type="submit">Descargar</button>
     </form>
-    <textarea id="logArea" rows="10" cols="90"></textarea>
+    <textarea id="logArea" rows="10" cols="90" style="white-space: nowrap"></textarea>
+    <div id="resourceList"></div>
   </body>
 </html>
