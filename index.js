@@ -29,6 +29,8 @@ function createWindow() {
 
     win.maximize();
 
+    win.webContents.session.clearCache();
+
     setInterval(downloader, 1000);
 }
 
@@ -65,11 +67,11 @@ const downloader = () => {
         itemsToDownload[0].downloading = true;
         const { url, folder } = itemsToDownload[0];
         console.log(`Descargando ${url}`);
-        download(win, url, {directory: folder}).then((data) => {
-            console.log(`Data: ${data}`);
-            console.log(`Se ha descargado en el directorio ${folder}`);
+        download(win, url, {directory: folder}).then(() => {
             itemsToDownload.shift();
-            win.webContents.send('log', `Se ha descargado ${url}`);
+            win.webContents.send('itemDownloaded', {url, folder});
+        }).catch(error => {
+            console.log(error);
         });
     }
 };

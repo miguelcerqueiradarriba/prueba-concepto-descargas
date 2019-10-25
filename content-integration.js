@@ -2,16 +2,58 @@ const {ipcRenderer} = require('electron');
 const axios = require('axios').default;
 const fs = require('fs');
 const stringify = require('querystring').stringify;
+const unzipper = require('unzipper');
 
-ipcRenderer.on('log' , function(event , data){
-    log(data);
-});
+const ENVIRONMENT_URL = 'http://localhost/';
+const RESOURCES_PATH = 'resources/';
 
-const downloadResources = (form) => {
-    clearLog();
+const activities = [];
+
+const downloadResourcesHandler = (form) => {
+    clearData();
+    downloadResources(form.token.value, JSON.parse(form.payload.value));
+    return false;
+};
+
+const downloadActivityHandler = (form) => {
+    clearData();
     try {
+        log("Pidiendo Activity... ");
         const token = form.token.value;
-        const payload = JSON.parse(form.payload.value);
+        const activityId = form.activityId.value;
+        const query = stringify({page: 0, size: 100, depth: 5, id: activityId});
+        axios({
+            url: `http://dev-contents.smarted.cloud/api/activities?${query}`,
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        }).then(response => {
+            const resourceIds = [];
+            if (response.data && response.data._embedded) {
+                log(`Activity recuperado correctamente: ${JSON.stringify(response.data._embedded.activities)}`);
+                response.data._embedded.activities.map(activityInfo => {
+                    if (activityInfo.resourceId) {
+                        resourceIds.push({id: activityInfo.resourceId});
+                        activities.push(activityInfo);
+                    }
+                });
+            } else {
+                log("No se ha encontrado el recurso.");
+            }
+            downloadResources(token, resourceIds);
+        }).catch(error => {
+            log(error);
+        });
+    } catch (error) {
+        log(error);
+    }
+    return false;
+};
+
+const downloadResources = (token, payload) => {
+    try {
+        log("Pidiendo recursos...");
         axios({
             url: 'http://dev-contents.smarted.cloud/api/resources/download-info',
             method: 'POST',
@@ -21,7 +63,7 @@ const downloadResources = (form) => {
             }
         }).then(response => {
             if (response.data.length) {
-                log("JSON de descargas recuperado correctamente.");
+                log(`Recursos recuperados correctamente: ${JSON.stringify(response.data)}`);
                 response.data.map(resourceInfo => {
                     if (resourceInfo.launcher) {
                         copyToLocalDb(resourceInfo);
@@ -40,16 +82,21 @@ const downloadResources = (form) => {
     } catch (error) {
         log(error);
     }
-    return false;
 };
 
 const copyToLocalDb = (resource) => {
     localStorage.setItem(resource.id, resource.launcher);
-    log(`Se guarda el recurso ${resource.id} en localStorage`);
+    log(`Se guarda el recurso ${resource.id} en localStorage con valor ${resource.launcher}`);
 };
 
+function getResourceFolder(resourceInfo) {
+    const folders = resourceInfo.launcher.split("/");
+    folders.pop();
+    return `${__dirname}/resources/${folders.join("/")}/`;
+}
+
 const storeResouceOnDisk = (resourceInfo) => {
-    const folder = `${__dirname}/resources/${resourceInfo.id}/`;
+    const folder = getResourceFolder(resourceInfo);
     createFolder(folder);
     ipcRenderer.send('download', resourceInfo.url, folder);
     log(`Descargando ${resourceInfo.url}`);
@@ -57,10 +104,10 @@ const storeResouceOnDisk = (resourceInfo) => {
 
 function createFolder(folder) {
     if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder, { recursive: true });
-        return log(`El directorio ${folder} ha sido creado`);
+        fs.mkdirSync(folder, {recursive: true});
+        return log(`Ha sido creado el directorio ${folder}`);
     }
-    log(`El directorio ${folder} ya existe`)
+    log(`Ya existe el directorio ${folder}`)
 }
 
 const log = (text) => {
@@ -69,19 +116,46 @@ const log = (text) => {
     logArea.scrollTop = logArea.scrollHeight;
 };
 
+const clearData = () => {
+    clearLog();
+    clearResources();
+};
+
 const clearLog = () => {
     const logArea = document.getElementById("logArea");
     logArea.innerHTML = "";
 };
 
+const clearResources = () => {
+    document.getElementById("resourceList").innerHTML = "";
+};
+
 const printResource = (key) => {
     const resourceUrl = localStorage.getItem(key);
+    const div = document.createElement('div');
     const resourceElement = document.createElement('a');
-    const linkText = document.createTextNode(key);
+    const activity = activities.find(activity => activity.resourceId === key);
+    const linkText = document.createTextNode(activity ? activity.name : key);
     resourceElement.appendChild(linkText);
     resourceElement.title = key;
-    resourceElement.href = resourceUrl;
-    document.getElementById("resourceList").appendChild(resourceElement);
+    resourceElement.href = ENVIRONMENT_URL + RESOURCES_PATH + resourceUrl;
+    resourceElement.target = '_blank';
+    div.appendChild(resourceElement);
+    document.getElementById("resourceList").appendChild(div);
+};
+
+const extractZips = (folder) => {
+    fs.readdir(folder, (err, files) => {
+        files.forEach(file => {
+            if (file.endsWith('.zip')) {
+                fs.createReadStream(folder + file)
+                    .pipe(unzipper.Extract({path: folder}));
+                fs.unlink(folder + file, () => {
+                    log(`Se ha descomprimido ${folder + file} y luego se ha borrado.`)
+                });
+            }
+        });
+    });
 };
 
 const getToken = () => {
@@ -96,11 +170,17 @@ const getToken = () => {
             Authorization: `Basic c21hcnRlZC14dW50YTphZ3JlZWQtc2V0dGxlZC1NT05FWS1uZXJ2ZQ==`
         }
     }).then(response => {
-        document.getElementById('token').value = response.data.access_token;
+        document.getElementById('resourceToken').value = response.data.access_token;
+        document.getElementById('activityToken').value = response.data.access_token;
         log("Token actualizado.");
     }).catch(error => {
         log(`Error al obtener el token: ${error}`);
     });
 };
+
+ipcRenderer.on('itemDownloaded', function (event, data) {
+    log(`Se ha descargado ${data.url}`);
+    extractZips(data.folder);
+});
 
 getToken();
