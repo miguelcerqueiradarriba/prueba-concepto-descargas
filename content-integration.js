@@ -54,31 +54,33 @@ const downloadActivityHandler = (form) => {
 const downloadResources = (token, payload) => {
     try {
         log("Pidiendo recursos...");
-        axios({
-            url: 'http://dev-contents.smarted.cloud/api/resources/download-info',
-            method: 'POST',
-            data: payload,
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        }).then(response => {
-            if (response.data.length) {
-                log(`Recursos recuperados correctamente: ${JSON.stringify(response.data)}`);
-                response.data.map(resourceInfo => {
-                    if (resourceInfo.launcher) {
-                        copyToLocalDb(resourceInfo);
-                        printResource(resourceInfo.id);
-                    }
-                    if (resourceInfo.url) {
-                        storeResouceOnDisk(resourceInfo);
-                    }
-                });
-            } else {
-                log("No se ha encontrado el recurso.");
-            }
-        }).catch(error => {
-            log(error);
-        });
+        setTimeout(() => {
+            axios({
+                url: 'http://dev-contents.smarted.cloud/api/resources/download-info',
+                method: 'POST',
+                data: payload,
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            }).then(response => {
+                if (response.data.length) {
+                    log(`Recursos recuperados correctamente: ${JSON.stringify(response.data)}`);
+                    response.data.map(resourceInfo => {
+                        if (resourceInfo.launcher) {
+                            copyToLocalDb(resourceInfo);
+                            printResource(resourceInfo.id);
+                        }
+                        if (resourceInfo.url) {
+                            storeResouceOnDisk(resourceInfo);
+                        }
+                    });
+                } else {
+                    log("No se ha encontrado el recurso.");
+                }
+            }).catch(error => {
+                log(error);
+            });
+        }, 1000);
     } catch (error) {
         log(error);
     }
