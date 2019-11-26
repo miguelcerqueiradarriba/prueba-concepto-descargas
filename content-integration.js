@@ -8,6 +8,7 @@ const ENVIRONMENT_URL = 'http://localhost/';
 const RESOURCES_PATH = 'resources/';
 
 const activities = [];
+const downloads = [];
 
 const downloadResourcesHandler = (form) => {
     clearData();
@@ -91,17 +92,10 @@ const copyToLocalDb = (resource) => {
     log(`Se guarda el recurso ${resource.id} en localStorage con valor ${resource.launcher}`);
 };
 
-function getResourceFolder(resourceInfo) {
-    const folders = resourceInfo.launcher.split("/");
-    folders.pop();
-    return `${__dirname}/resources/${folders.join("/")}/`;
-}
-
 const storeResouceOnDisk = (resourceInfo) => {
-    const folder = getResourceFolder(resourceInfo);
+    const folder = `${__dirname}/resources/${resourceInfo.id}/`;
     createFolder(folder);
-    ipcRenderer.send('download', resourceInfo.url, folder);
-    log(`Descargando ${resourceInfo.url}`);
+    downloads.push({url: resourceInfo.url, folder});
 };
 
 function createFolder(folder) {
@@ -181,8 +175,29 @@ const getToken = () => {
 };
 
 ipcRenderer.on('itemDownloaded', function (event, data) {
+    downloads.shift();
     log(`Se ha descargado ${data.url}`);
     extractZips(data.folder);
 });
 
+ipcRenderer.on('downloadError', function (event, data) {
+    downloads.shift();
+    log(`No se ha podido descargar ${data.url}`);
+});
+
+function downloader() {
+    if (downloads[0]) {
+        if (!downloads[0].downloading) {
+            downloads[0].downloading = true;
+            const { url, folder } = downloads[0];
+            ipcRenderer.send('download', url, folder);
+            log(`Descargando ${url}`);
+        } else {
+            log("...");
+        }
+    }
+}
+
+// Se aplica una política de una descarga a la vez, ya que si no la librería de descargas daba problemas
+setInterval(downloader, 1000);
 getToken();

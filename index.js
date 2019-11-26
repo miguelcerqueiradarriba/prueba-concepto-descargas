@@ -31,7 +31,6 @@ function createWindow() {
 
     win.webContents.session.clearCache();
 
-    setInterval(downloader, 1000);
 }
 
 // Este método será llamado cuando Electron haya terminado
@@ -56,22 +55,11 @@ app.on('activate', () => {
     }
 });
 
-const itemsToDownload = [];
-
 ipcMain.on('download', (event, url, folder) => {
-    itemsToDownload.push({url, folder});
+    download(win, url, {directory: folder}).then(() => {
+        win.webContents.send('itemDownloaded', {url, folder});
+    }).catch(error => {
+        win.webContents.send('downloadError', {url, folder});
+        console.log(error);
+    });
 });
-
-const downloader = () => {
-    if (itemsToDownload[0] && !itemsToDownload[0].downloading) {
-        itemsToDownload[0].downloading = true;
-        const { url, folder } = itemsToDownload[0];
-        console.log(`Descargando ${url}`);
-        download(win, url, {directory: folder}).then(() => {
-            itemsToDownload.shift();
-            win.webContents.send('itemDownloaded', {url, folder});
-        }).catch(error => {
-            console.log(error);
-        });
-    }
-};
